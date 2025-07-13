@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import mongoose, { Model, Types } from "mongoose";
+import mongoose, { Model, RootFilterQuery, Types } from "mongoose";
 import { Post, PostDocument } from "../../database/schemas/post.schema";
 import { User } from "../../database/schemas/user.schema";
 import { UserRole } from "../../enums/user.enum";
@@ -24,9 +24,16 @@ export class PostService {
 
   async feed(query: GetPostsQueryDto, user: User): Promise<Post[]> {
     const { search, page = 1, limit = 10 } = query;
+    const filter: RootFilterQuery<Post> = { deletedAt: null };
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
+      ];
+    }
 
     const aggregate = await this.postModel.aggregate([
-      { $match: { deletedAt: null } },
+      { $match: filter },
       { $sort: { createdAt: -1 } },
       {
         $facet: {
@@ -130,10 +137,18 @@ export class PostService {
   async post(query: GetPostsQueryDto, user: User): Promise<Post[]> {
     const { search, page = 1, limit = 10, author } = query;
 
+    const filter: RootFilterQuery<Post> = { deletedAt: null };
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
+      ];
+    }
+
     const aggregate = await this.postModel.aggregate([
       {
         $match: {
-          deletedAt: null,
+          ...filter,
           author: new mongoose.Types.ObjectId(author),
         },
       },
