@@ -8,7 +8,7 @@ export class RedisConfig {
   @IsString()
   host: string;
 
-  @Value("REDIS_PORT1", { default: 6379, parse: parseInt })
+  @Value("REDIS_PORT", { default: 6379, parse: parseInt })
   @IsNotEmpty()
   @IsNumber()
   port: number;
