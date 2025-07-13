@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import mongoose, { Model, RootFilterQuery, Types } from "mongoose";
+import mongoose, { Model, Types } from "mongoose";
 import { Post, PostDocument } from "../../database/schemas/post.schema";
 import { User } from "../../database/schemas/user.schema";
 import { UserRole } from "../../enums/user.enum";
@@ -82,6 +82,20 @@ export class PostService {
             {
               $addFields: {
                 isLike: { $cond: [{ $size: "$isLike" }, true, false] },
+                imageUrl: {
+                  $cond: [
+                    { $ne: ["$imageUrl", null] },
+                    { $concat: [process.env.BASE_URL, "/", "$imageUrl"] },
+                    null,
+                  ],
+                },
+                videoUrl: {
+                  $cond: [
+                    { $ne: ["$videoUrl", ""] },
+                    { $concat: [process.env.BASE_URL, "/", "$videoUrl"] },
+                    null,
+                  ],
+                },
               },
             },
           ],
@@ -178,6 +192,20 @@ export class PostService {
             {
               $addFields: {
                 isLike: { $cond: [{ $size: "$isLike" }, true, false] },
+                imageUrl: {
+                  $cond: [
+                    { $ne: ["$imageUrl", null] },
+                    { $concat: [process.env.BASE_URL, "/", "$imageUrl"] },
+                    null,
+                  ],
+                },
+                videoUrl: {
+                  $cond: [
+                    { $ne: ["$videoUrl", ""] },
+                    { $concat: [process.env.BASE_URL, "/", "$videoUrl"] },
+                    null,
+                  ],
+                },
               },
             },
           ],
