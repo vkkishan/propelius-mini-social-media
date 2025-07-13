@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model, RootFilterQuery, Types } from "mongoose";
+import mongoose, { Model, RootFilterQuery, Types } from "mongoose";
 import { Post, PostDocument } from "../../database/schemas/post.schema";
 import { User } from "../../database/schemas/user.schema";
 import { UserRole } from "../../enums/user.enum";
@@ -22,38 +22,191 @@ export class PostService {
     return await post.save();
   }
 
-  async findAll(
-    query: GetPostsQueryDto,
-  ): Promise<{ posts: Post[]; total: number; page: number; limit: number }> {
+  async feed(query: GetPostsQueryDto, user: User): Promise<Post[]> {
     const { search, page = 1, limit = 10 } = query;
-    const skip = (page - 1) * limit;
 
-    const filter: RootFilterQuery<Post> = { deletedAt: null };
-
-    if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { content: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const [posts, total] = await Promise.all([
-      this.postModel
-        .find(filter)
-        .populate("author", "firstName lastName email")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .exec(),
-      this.postModel.countDocuments(filter),
+    const aggregate = await this.postModel.aggregate([
+      { $match: { deletedAt: null } },
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          pagination: [
+            {
+              $count: "totalResults",
+            },
+            {
+              $addFields: {
+                page,
+                limit,
+                totalPages: {
+                  $ceil: {
+                    $divide: ["$totalResults", limit],
+                  },
+                },
+              },
+            },
+          ],
+          data: [
+            { $skip: (page - 1) * limit },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: "users",
+                localField: "author",
+                foreignField: "_id",
+                pipeline: [
+                  {
+                    $project: {
+                      email: 1,
+                      firstName: 1,
+                      lastName: 1,
+                    },
+                  },
+                ],
+                as: "author",
+              },
+            },
+            {
+              $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "likeable",
+                pipeline: [
+                  {
+                    $match: { user: new mongoose.Types.ObjectId(user._id) },
+                  },
+                ],
+                as: "isLike",
+              },
+            },
+            {
+              $addFields: {
+                isLike: { $cond: [{ $size: "$isLike" }, true, false] },
+              },
+            },
+          ],
+        },
+      },
+      {
+        $unwind: {
+          path: "$pagination",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $replaceRoot: {
+          newRoot: {
+            $mergeObjects: [
+              {
+                $ifNull: [
+                  "$pagination",
+                  { totalResults: 0, page, limit, totalPages: 0 },
+                ],
+              },
+              { results: "$data" },
+            ],
+          },
+        },
+      },
     ]);
 
-    return {
-      posts,
-      total,
-      page,
-      limit,
-    };
+    return aggregate;
+  }
+
+  async post(query: GetPostsQueryDto, user: User): Promise<Post[]> {
+    const { search, page = 1, limit = 10, author } = query;
+
+    const aggregate = await this.postModel.aggregate([
+      {
+        $match: {
+          deletedAt: null,
+          author: new mongoose.Types.ObjectId(author),
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          pagination: [
+            {
+              $count: "totalResults",
+            },
+            {
+              $addFields: {
+                page,
+                limit,
+                totalPages: {
+                  $ceil: {
+                    $divide: ["$totalResults", limit],
+                  },
+                },
+              },
+            },
+          ],
+          data: [
+            { $skip: (page - 1) * limit },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: "users",
+                localField: "author",
+                foreignField: "_id",
+                pipeline: [
+                  {
+                    $project: {
+                      email: 1,
+                      firstName: 1,
+                      lastName: 1,
+                    },
+                  },
+                ],
+                as: "author",
+              },
+            },
+            {
+              $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "likeable",
+                pipeline: [
+                  {
+                    $match: { user: new mongoose.Types.ObjectId(user._id) },
+                  },
+                ],
+                as: "isLike",
+              },
+            },
+            {
+              $addFields: {
+                isLike: { $cond: [{ $size: "$isLike" }, true, false] },
+              },
+            },
+          ],
+        },
+      },
+      {
+        $unwind: {
+          path: "$pagination",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $replaceRoot: {
+          newRoot: {
+            $mergeObjects: [
+              {
+                $ifNull: [
+                  "$pagination",
+                  { totalResults: 0, page, limit, totalPages: 0 },
+                ],
+              },
+              { results: "$data" },
+            ],
+          },
+        },
+      },
+    ]);
+
+    return aggregate;
   }
 
   async findOne(id: string): Promise<Post> {

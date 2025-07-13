@@ -48,6 +48,7 @@ export class PostController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
+  @Auth([UserRole.USER])
   @ApiOperation({ summary: "Get all posts with pagination and filtering" })
   @ApiQuery({
     name: "search",
@@ -67,11 +68,47 @@ export class PostController {
     type: Number,
     description: "Items per page",
   })
+  @ApiQuery({
+    name: "author",
+    required: true,
+    type: String,
+    description: "Author",
+  })
   @ApiResponse({ status: 200, description: "Posts retrieved successfully" })
-  async findAll(@Query() query: GetPostsQueryDto) {
+  async post(@Query() query: GetPostsQueryDto, @AuthUser() user: User) {
     return {
-      data: await this.postService.findAll(query),
+      data: await this.postService.post(query, user),
       message: "Posts retrieved successfully",
+    };
+  }
+
+  @Get("feed")
+  @HttpCode(HttpStatus.OK)
+  @Auth([UserRole.USER])
+  @ApiOperation({ summary: "Get feed with pagination" })
+  @ApiQuery({
+    name: "search",
+    required: false,
+    description: "Search in title and content",
+  })
+  @ApiQuery({ name: "tag", required: false, description: "Filter by tag" })
+  @ApiQuery({
+    name: "page",
+    required: false,
+    type: Number,
+    description: "Page number",
+  })
+  @ApiQuery({
+    name: "limit",
+    required: false,
+    type: Number,
+    description: "Items per page",
+  })
+  @ApiResponse({ status: 200, description: "Posts retrieved successfully" })
+  async feed(@Query() query: GetPostsQueryDto, @AuthUser() user: User) {
+    return {
+      data: await this.postService.feed(query, user),
+      message: "Feed retrieved successfully",
     };
   }
 
